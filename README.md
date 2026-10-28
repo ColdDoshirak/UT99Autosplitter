@@ -1,11 +1,12 @@
 # UT99Autosplitter
 
-This is a simple LiveSplit ASL script for Unreal Tournament (1999) speedrunning. So far, it only works with the **PC version 469e - Release** of the game.
+This is a simple LiveSplit ASL script for Unreal Tournament (1999) speedrunning. It works with **any OldUnreal 469 build**: the 32-bit builds (v469e and older) and the 64-bit builds (v469f and newer).
 You can download the latest release version of the game on the [OldUnreal's website](https://www.oldunreal.com/downloads/unrealtournament/full-game-installers/), or download the latest community patch on the [OldUnreal's GitHub page](https://github.com/OldUnreal/UnrealTournamentPatches/releases).
 
 > [!NOTE]
-> If you're not running the latest release version of the game, the autosplitter will prompt you to update your game.
+> So far, only **v469e - Release** and **v469f - RC6** have been tested. Other 469 builds are expected to work thanks to the runtime offset resolution, but if the script fails to initialize, please open an issue with your game version and the `[UT99]` lines from DebugView.
 
+- [Supported versions](#supported-versions)
 - [Installation](#installation)
 - [Features](#features)
   - [Auto-start](#auto-start)
@@ -26,8 +27,19 @@ You can download the latest release version of the game on the [OldUnreal's webs
   - [In-game time](#in-game-time)
   - [Extra options](#extra-options)
   - [ASL Var Viewer](#asl-var-viewer)
+- [How it works](#how-it-works)
+- [Troubleshooting](#troubleshooting)
 - [Have any issues?](#have-any-issues)
 - [Special thanks](#special-thanks)
+
+## Supported versions
+
+| Version | Architecture | Status |
+|---|---|---|
+| v469e - Release | 32-bit | Tested |
+| v469f - RC6 | 64-bit | Tested |
+| Other 469 builds (469a–469d, 469f release and newer) | 32/64-bit | Expected to work, not tested yet |
+| 436 / 451 (pre-OldUnreal) | 32-bit | Unknown |
 
 ## Installation
 
@@ -169,6 +181,39 @@ Under **Variables**, you will find:
 The last three variables will only update after each frag in DM, after each point earned in DOM or after each flag capture in CTF. These are not updated in AS maps.
 
 You will also have a multitude of other variables, which are being used by script. Play with the settings a bit to see if you find something interesting!
+
+## How it works
+
+The previous version of the script used fixed pointer paths, such as `UnrealTournament.exe+0x37E70, 0x44, 0x2C, ...`. These are only valid for one build. v469f moved to 64-bit, which changed every offset (for example, `Pawn.GroundSpeed` moved from `0x26C` to `0x37C`).
+
+This version finds the offsets itself when it connects to the game:
+
+1. `Core.dll` exports `UObject::GObjObjects` (all engine objects) and `FName::Names` (all names) in every 469 build.
+2. The script walks these lists to find the `GameEngine` object and the UnrealScript classes it needs (`Pawn`, `GameInfo`, `DeathMatchPlus`, ...).
+3. Every `UProperty` stores its own byte offset, so values like `Pawn.GroundSpeed` or `LevelInfo.Game` come from the engine itself.
+4. The few C++-only fields (`UEngine::Client`, `UClient::Viewports` and the static engine pointer in `UnrealTournament.exe`) are found with simple checks.
+
+This takes about 50 ms. If the game is still starting up, the script tries again every second.
+
+For reference, here are the offsets the script finds on the two tested builds:
+
+| Field | v469e (32-bit) | v469f RC6 (64-bit) |
+|---|---|---|
+| Static GameEngine pointer | `UnrealTournament.exe+0x37E70` | `UnrealTournament.exe+0x33800` |
+| UEngine.Client / UClient.Viewports / Player.Actor | 0x44 / 0x2C / 0x30 | 0x80 / 0x50 / 0x58 |
+| Actor.Level / LevelInfo.Game / GameInfo.GameReplicationInfo | 0x64 / 0x460 / 0x3A0 | 0x98 / 0x628 / 0x538 |
+| DeathMatchPlus.RemainingTime / ElapsedTime | 0x1370 / 0x1374 | 0x1A50 / 0x1A54 |
+| Pawn.PlayerReplicationInfo / PlayerReplicationInfo.Score / TeamInfo.Score | 0x44C / 0x23C / 0x21C | 0x668 / 0x340 / 0x314 |
+
+## Troubleshooting
+
+The script logs what it does with the `[UT99]` prefix. You can read these messages with [DebugView](https://learn.microsoft.com/en-us/sysinternals/downloads/debugview). On success, you'll see a line like this:
+
+```
+[UT99] Resolved (64-bit). Engine=UnrealTournament.exe+0x33800 Client=+0x80 Viewports=+0x50 ...
+```
+
+If the script doesn't work with your game version, please open an issue and include your game version and the `[UT99]` lines from DebugView.
 
 ## Have any issues?
 
