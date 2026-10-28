@@ -2,7 +2,7 @@
 // Made by CodeM aka MrCodeMUN
 // With inspiration from Quake III Arena, UT2k4 and Horizon Forbidden West ASL
 //
-// v1.0 by ColdDoshirak, written with AI assistance: version-independent memory access.
+// v1.0 by HotDoshirak, written with AI assistance: version-independent memory access.
 // Instead of hard-coded pointer paths for a single build, the script reads Unreal Engine's own reflection data at runtime:
 // Core.dll exports UObject::GObjObjects and FName::Names, which let us find the GameEngine object and every UnrealScript
 // class, and each UProperty stores its own memory offset. This works for 32-bit (v469e and older 469 builds) and 64-bit
