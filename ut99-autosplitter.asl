@@ -1,60 +1,15 @@
-// UT99 Autosplitter v0.9
+// UT99 Autosplitter v1.0
 // Made by CodeM aka MrCodeMUN
 // With inspiration from Quake III Arena, UT2k4 and Horizon Forbidden West ASL
+//
+// v1.0 by HotDoshirak, with the help of AI: version-independent memory access.
+// Instead of hard-coded pointer paths for a single build, the script reads Unreal Engine's own reflection data at runtime:
+// Core.dll exports UObject::GObjObjects and FName::Names, which let us find the GameEngine object and every UnrealScript
+// class, and each UProperty stores its own memory offset. This works for 32-bit (v469e and older 469 builds) and 64-bit
+// (v469f and newer) builds alike, without having to update the script for every game patch.
+// Only a handful of native (C++-only) offsets are guessed with small heuristics, see vars.TryResolve below.
 
-state("UnrealTournament", "v469e - Release")
-{
-	// Parent addresses table:
-	// 0x00037E70: 														UGameEngine
-	// 0x00037E70, 0x44: 												Pointer to UWindowsClient
-	// 0x00037E70, 0x44, 0x2C, 0x0: 									Pointer to UWindowsViewport
-	// 0x00037E70, 0x44, 0x2C, 0x0, 0x30: 								Pointer to APlayerPawn
-	// 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x64: 						Pointer to ALevelInfo
-	// 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x64, 0x460: 					Pointer to AGameInfo
-	// 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x64, 0x460, 0x3A0: 			Pointer to AGameInfoReplicationInfo
-	// 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x64, 0x460, 0x3A0, 0x388: 	Pointer to AInfo (Team 0 info)
-	// 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x44C: 						Pointer to APlayerReplicationInfo
-
-	// Current state variables not used in the script, but that can be used with ASL Var Viewer
-	// localizedLevelName: 		"ITV Oblivion", "ITV oubli", etc.
-	// localizedGamemodeName: 	"Tournament DeathMatch", "Tournoi Combat à Mort", etc.
-	// airControl: 				player's air control value in percentage (%). Will be 1 if under the AntiGrav boots effect. Previously used as an anti-cheat experimental feature.
-	// jumpZ:					player's jump height value. Default is 325, or 357,5 if in Hardcore mode. Will be 975 under the AntiGrav boots effect. Previously used as an anti-cheat experimental feature.
-	string255 localizedLevelName : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x64, 0x390, 0x0;
-	string255 localizedGamemodeName : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x64, 0x460, 0x334, 0x0;
-	float airControl : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x284;
-	float jumpZ : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x27C;
-
-	// Current state variables used in the script
-	// playerPawnState: 	a combination of four bytes that can identify the "state" the player is in (waiting, walking, swimming, feigning death, game ended, spectator, etc.).
-	// playerPawnViewState: a value influenced by crouching or swimming. Can be either 66, 74, 82, 90 or 98. If bBehindView is True (the player is in third person), the value will be upped by 1.
-	// mapName: 			the map file name. "DM-Oblivion.unr", "DM-Peak.unr", etc.
-	// gameSpeed: 			game speed in percentage (%).
-	// playerGroundSpeed: 	the player's speeed on the ground. Default is 400.
-	// remainingTime: 		game's remaining time in seconds.
-	// elapsedTime: 		game's elapsed time in seconds.
-	// playerScore: 		player's score. DOM gamemode's score is decimal, although hidden to the player. This is why it's a float.
-	// playerTeamScore: 	player's team score. DOM gamemode's score is decimal, although hidden to the player. This is why it's a float.
-	// gameItemGoals: 		score limit in DOM and CTF.
-	// gameKillGoals: 		score limit in DM and LDM (Challenge ladder mode).
-	// gameSecretGoals: 	usually a time goal in minutes. Will always be 1 in the second part of AS maps, for some reason.
-
-	// Alternatively, we can also check for the air control value of the AGameInfo object, which doesn't change during the match, but breaks in menus.
-	// It can be found here: 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x64, 0x460, 0x1354
-
-	byte4 playerPawnState : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x0C, 0x1C;
-	byte playerPawnViewState : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x20C;
-	string255 mapName : 0x00037E70, 0xD0, 0x0;
-	float gameSpeed : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x64, 0x460, 0x224;
-	float playerGroundSpeed : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x26C;
-	int remainingTime : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x64, 0x460, 0x1370;
-	int elapsedTime : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x64, 0x460, 0x1374;
-	float playerScore : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x44C, 0x23C;
-	float playerTeamScore : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x64, 0x460, 0x3A0, 0x388, 0x21C;
-	int gameItemGoals : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x64, 0x460, 0x3A0, 0x398;
-	int gameKillGoals : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x64, 0x460, 0x3A0, 0x39C;
-	int gameSecretGoals : 0x00037E70, 0x44, 0x2C, 0x0, 0x30, 0x64, 0x460, 0x3A0, 0x3A0;
-}
+state("UnrealTournament") {}
 
 startup
 {
@@ -72,57 +27,58 @@ startup
 	vars.scorePerMin = 0;
 	vars.estimatedLevelInGameTime = TimeSpan.Zero;
 
-	// autoStartSettingName: 	used to get the auto-start setting name from a map file name.
-	var autoStartSettingName = new Dictionary<string, string>()
+	// Map names are read from the level's package name, so they don't have the ".unr" extension.
+	// autoStartSettingName: 	used to get the auto-start setting name from a map name.
+	var autoStartSettingName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 	{
-		{ "DM-Oblivion.unr", "auto_start_oblivion" },
-		{ "DOM-Condemned.unr", "auto_start_condemned" },
-		{ "CTF-Niven.unr", "auto_start_niven" },
-		{ "AS-Frigate.unr", "auto_start_frigate" },
-		{ "DM-Phobos.unr", "auto_start_phobos" }
+		{ "DM-Oblivion", "auto_start_oblivion" },
+		{ "DOM-Condemned", "auto_start_condemned" },
+		{ "CTF-Niven", "auto_start_niven" },
+		{ "AS-Frigate", "auto_start_frigate" },
+		{ "DM-Phobos", "auto_start_phobos" }
 	};
 
-	// autoResetSettingName: 	used to get the auto-reset setting name from a map file name.
-	var autoResetSettingName = new Dictionary<string, string>()
+	// autoResetSettingName: 	used to get the auto-reset setting name from a map name.
+	var autoResetSettingName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 	{
-		{ "DM-Oblivion.unr", "auto_reset_oblivion" },
-		{ "DOM-Condemned.unr", "auto_reset_condemned" },
-		{ "CTF-Niven.unr", "auto_reset_niven" },
-		{ "AS-Frigate.unr", "auto_reset_frigate" },
-		{ "DM-Phobos.unr", "auto_reset_phobos" }
+		{ "DM-Oblivion", "auto_reset_oblivion" },
+		{ "DOM-Condemned", "auto_reset_condemned" },
+		{ "CTF-Niven", "auto_reset_niven" },
+		{ "AS-Frigate", "auto_reset_frigate" },
+		{ "DM-Phobos", "auto_reset_phobos" }
 	};
 
-	// autoSplitSettingName: 	used to get the auto-split setting name from a map file name.
-	var autoSplitSettingName = new Dictionary<string, string>()
+	// autoSplitSettingName: 	used to get the auto-split setting name from a map name.
+	var autoSplitSettingName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 	{
-		{ "DM-Fractal.unr", "auto_split_fractal" },
-		{ "DOM-Cryptic.unr", "auto_split_cryptic" },
-		{ "CTF-EternalCave.unr", "auto_split_eternal_cave" },
-		{ "DM-Peak.unr", "auto_split_peak" },
-		{ "DOM-MetalDream.unr", "auto_split_metal_dream" },
-		{ "CTF-November.unr", "auto_split_november" },
-		{ "CTF-Orbital.unr", "auto_split_orbital" },
-		{ "AS-Overlord.unr", "auto_split_overlord" },
-		{ "DM-HyperBlast.unr", "auto_split_hyperblast" }
+		{ "DM-Fractal", "auto_split_fractal" },
+		{ "DOM-Cryptic", "auto_split_cryptic" },
+		{ "CTF-EternalCave", "auto_split_eternal_cave" },
+		{ "DM-Peak", "auto_split_peak" },
+		{ "DOM-MetalDream", "auto_split_metal_dream" },
+		{ "CTF-November", "auto_split_november" },
+		{ "CTF-Orbital", "auto_split_orbital" },
+		{ "AS-Overlord", "auto_split_overlord" },
+		{ "DM-HyperBlast", "auto_split_hyperblast" }
 	};
 
-	// Defining the different possible PlayerPawn states used in the script. Other states not used in the script includes:
-	// FeigningDeath: 					{ 2, 28, 7, 248 }
-	// Spectator / CheatFlying: 		{ 2, 12, 5, 249 }
-	// Swimming: 						{ 2, 28, 5, 249 }
-	// Camera (except in AS maps): 		{ 2, 12, 4, 248 }
-	byte[] playerWaitingState = { 2, 12, 7, 216 };
-	byte[] playerWalkingState = { 2, 28, 7, 249 };
-	byte[] dyingState = { 2, 9, 7, 24 };
-	byte[] gameEndedState = { 2, 9, 5, 24 };
-	vars.playerWaitingState = playerWaitingState;
-	vars.playerWalkingState = playerWalkingState;
-	vars.dyingState = dyingState;
-	vars.gameEndedState = gameEndedState;
+	// PlayerPawn states used in the script, identified by their UnrealScript state name.
+	// Other states not used in the script include FeigningDeath, PlayerSwimming, CheatFlying, PlayerSpectating, etc.
+	vars.playerWaitingState = "PlayerWaiting";
+	vars.playerWalkingState = "PlayerWalking";
+	vars.dyingState = "Dying";
+	vars.gameEndedState = "GameEnded";
+
+	// Known builds, only used to display the version. Any other build is handled by the runtime offset resolution.
+	vars.knownVersions = new Dictionary<string, string>()
+	{
+		{ "03E2900BDC7848AD6B86D3171F19E25A8E395FAAFBD9EE4FD9F5C30F6A2D4DBE", "v469e - Release" },
+		{ "7EF4C07E096E392EA24DD4CE1E20921A5073EA5B25990ACB2DB81B8399DB5B3C", "v469f - RC6 (64-bit)" }
+	};
 
 	// Defining first and last levels
-	var firstLevels = new List<String>(new string[] { "DM-Oblivion.unr", "DOM-Condemned.unr", "CTF-Niven.unr", "AS-Frigate.unr", "DM-Phobos.unr" });
-	var thresholdLevels = new List<String>(new string[] { "DM-Fractal.unr", "DOM-Cryptic.unr", "CTF-EternalCave.unr", "DM-Peak.unr", "DOM-MetalDream.unr", "CTF-November.unr", "CTF-Orbital.unr", "AS-Overlord.unr", "DM-HyperBlast.unr" });
+	var firstLevels = new HashSet<string>(autoStartSettingName.Keys, StringComparer.OrdinalIgnoreCase);
+	var thresholdLevels = new HashSet<string>(autoSplitSettingName.Keys, StringComparer.OrdinalIgnoreCase);
 
 	// completedLevels: 	used to track down the levels completed by the player.
 	// elapsedTime:			in-game time, basically.
@@ -182,57 +138,25 @@ startup
 	};
 	vars.CalcModuleHash = CalcModuleHash;
 
-	// Casts a byte array as string for debugging purposes
-	Func<byte[], string> ByteArrayToString = (bytes) => {
-		var sb = new StringBuilder("new byte[] { ");
-
-		foreach (var b in bytes) {
-			sb.Append(b + ", ");
-		}
-
-		sb.Append("}");
-		return sb.ToString();
-	};
-	vars.ByteArrayToString = ByteArrayToString;
-
-	// Compares two byte arrays. Return True if they are equals.
-	Func<byte[], byte[], bool> CompareByteArrays = (a, b) => {
-		if (a == null || b == null) return a == b;
-		if (a.Length != b.Length) return false;
-
-		for (int i = 0; i < a.Length; i++) {
-			if (a[i] != b[i]) return false;
-		}
-
-		return true;
-	};
-
 	// Checks if a playerPawnState corresponds to a specific stateToCompare. Return True if they are equal.
-	Func<byte[], byte[], bool> IsInState = (playerPawnState, stateToCompare) => {
-		return CompareByteArrays(playerPawnState, stateToCompare);
+	Func<string, string, bool> IsInState = (playerPawnState, stateToCompare) => {
+		return playerPawnState == stateToCompare;
 	};
 	vars.IsInState = IsInState;
 
-	// To ensure we only split at the end of the the second part of an AS map, we check for the property "bBehindView" of the PlayerPawn.
-	// This value is only True if the defending team wins the match. It's also True at the end of a match in every other gamemode.
-	Func<byte, bool> IsBehindViewEnabled = (playerPawnViewState) => {
-		return playerPawnViewState % 2 == 1;
-	};
-	vars.IsBehindViewEnabled = IsBehindViewEnabled;
-
 	// Checks if the level is one of the five first levels in the ladder mode.
 	Func<string, bool> IsFirstLevel = (mapName) => {
-		return firstLevels.Contains(mapName);
+		return mapName != null && firstLevels.Contains(mapName);
 	};
 	vars.IsFirstLevel = IsFirstLevel;
 
 	// Checks if the level is one of the third or last levels in the ladder mode.
 	Func<string, bool> IsThirdOrFinalLevel = (mapName) => {
-		return thresholdLevels.Contains(mapName);
+		return mapName != null && thresholdLevels.Contains(mapName);
 	};
 	vars.IsThirdOrFinalLevel = IsThirdOrFinalLevel;
 
-	// Gets the proper settings name from a map file name.
+	// Gets the proper settings name from a map name.
 	Func<string, string> GetAutoStartSettingFromMapName = (mapName) => {
 		return autoStartSettingName[mapName];
 	};
@@ -269,37 +193,438 @@ startup
 		vars.elapsedTime = TimeSpan.Zero;
 	};
 	vars.ResetVarsValues = ResetVarsValues;
+
+	// --------------------------
+	// RUNTIME OFFSET RESOLUTION
+	// --------------------------
+	// Layout of the UObject header. It hasn't changed since 1999, only the pointer size differs:
+	// vtable, Index, HashNext, StateFrame, _Linker, _LinkerIndex, Outer, ObjectFlags, Name, Class
+	// FNameEntry: Index, Flags, HashNext, Name[] (UTF-16)
+	// FStateFrame: vtable, Node, Object, Code, Locals, CurrentFrame, StateNode, ProbeMask, ...
+	// These are double-checked at runtime against the engine's own reflection (Object.Outer and Object.Class properties).
+
+	// Reads an FName as a string. Names never change once created, so they are cached.
+	var nameCache = new Dictionary<int, string>();
+	Func<Process, int, string> NameOf = (proc, index) => {
+		string cached;
+		if (nameCache.TryGetValue(index, out cached)) {
+			return cached;
+		}
+
+		IntPtr namesArray = vars.namesArray;
+		int ps = proc.Is64Bit() ? 8 : 4;
+		if (index <= 0 || index >= proc.ReadValue<int>(namesArray + ps)) {
+			return null;
+		}
+
+		IntPtr entry = proc.ReadPointer(proc.ReadPointer(namesArray) + index * ps);
+		if (entry == IntPtr.Zero) {
+			return null;
+		}
+
+		string name = proc.ReadString(entry + (proc.Is64Bit() ? 0x10 : 0x0C), ReadStringType.UTF16, 128);
+		nameCache[index] = name;
+		return name;
+	};
+	vars.NameOf = NameOf;
+	vars.ClearNameCache = (Action) (() => nameCache.Clear());
+
+	// Finds a symbol exported by a loaded module by parsing its PE export table in memory.
+	Func<Process, ProcessModuleWow64Safe, string, IntPtr> FindExport = (proc, module, prefix) => {
+		IntPtr b = module.BaseAddress;
+		int pe = proc.ReadValue<int>(b + 0x3C);
+		int exportRva = proc.ReadValue<int>(b + pe + (proc.Is64Bit() ? 0x88 : 0x78));
+		IntPtr exports = b + exportRva;
+		int count = proc.ReadValue<int>(exports + 0x18);
+		IntPtr functions = b + proc.ReadValue<int>(exports + 0x1C);
+		IntPtr names = b + proc.ReadValue<int>(exports + 0x20);
+		IntPtr ordinals = b + proc.ReadValue<int>(exports + 0x24);
+
+		for (int i = 0; i < count; i++) {
+			string name = proc.ReadString(b + proc.ReadValue<int>(names + i * 4), ReadStringType.ASCII, 128);
+			if (name != null && name.StartsWith(prefix)) {
+				int ordinal = proc.ReadValue<ushort>(ordinals + i * 2);
+				return b + proc.ReadValue<int>(functions + ordinal * 4);
+			}
+		}
+
+		return IntPtr.Zero;
+	};
+
+	// Finds the GameEngine object and every offset the script needs, then creates the memory watchers.
+	// Returns false if the game isn't ready yet (still starting up), in which case it'll be called again later.
+	Func<Process, bool> TryResolve = (proc) => {
+		bool is64 = proc.Is64Bit();
+		int ps = is64 ? 8 : 4;
+		int oOuter = is64 ? 0x30 : 0x18;
+		int oName = is64 ? 0x3C : 0x20;
+		int oClass = is64 ? 0x40 : 0x24;
+		int oStateFrame = 3 * ps;
+		int oStateNode = 6 * ps;
+
+		var core = proc.ModulesWow64Safe().FirstOrDefault(m => m.ModuleName.Equals("Core.dll", StringComparison.OrdinalIgnoreCase));
+		if (core == null) {
+			return false;
+		}
+
+		IntPtr objectsArray = FindExport(proc, core, "?GObjObjects@UObject@@");
+		IntPtr namesArray = FindExport(proc, core, "?Names@FName@@");
+		if (objectsArray == IntPtr.Zero || namesArray == IntPtr.Zero) {
+			print("[UT99] Core.dll exports not found");
+			return false;
+		}
+		vars.namesArray = namesArray;
+
+		Func<IntPtr, IntPtr> Ptr = (a) => proc.ReadPointer(a);
+		Func<IntPtr, string> ObjName = (o) => o == IntPtr.Zero ? null : NameOf(proc, proc.ReadValue<int>(o + oName));
+		Func<IntPtr, IntPtr> ObjClass = (o) => o == IntPtr.Zero ? IntPtr.Zero : Ptr(o + oClass);
+		Func<IntPtr, IntPtr> ObjOuter = (o) => o == IntPtr.Zero ? IntPtr.Zero : Ptr(o + oOuter);
+
+		// Resolve the indices of the names we're looking for
+		var wanted = new HashSet<string> {
+			"Class", "Object", "Actor", "Pawn", "Player", "LevelInfo", "GameInfo", "DeathMatchPlus", "PlayerReplicationInfo",
+			"TeamInfo", "TournamentGameReplicationInfo", "GameEngine"
+		};
+		var nameIndex = new Dictionary<string, int>();
+		int namesCount = proc.ReadValue<int>(namesArray + ps);
+		byte[] nameEntries = proc.ReadBytes(Ptr(namesArray), namesCount * ps);
+		if (nameEntries == null) {
+			return false;
+		}
+		for (int i = 0; i < namesCount && nameIndex.Count < wanted.Count; i++) {
+			IntPtr entry = is64 ? (IntPtr) BitConverter.ToInt64(nameEntries, i * ps) : (IntPtr) BitConverter.ToInt32(nameEntries, i * ps);
+			if (entry == IntPtr.Zero) continue;
+			string name = proc.ReadString(entry + (is64 ? 0x10 : 0x0C), ReadStringType.UTF16, 128);
+			if (name != null && wanted.Contains(name) && !nameIndex.ContainsKey(name)) {
+				nameIndex[name] = i;
+			}
+		}
+		if (nameIndex.Count < wanted.Count) {
+			print("[UT99] Missing names: " + string.Join(", ", wanted.Where(w => !nameIndex.ContainsKey(w))));
+			return false;
+		}
+
+		// Walk every object once to find the classes and the GameEngine instance
+		int objectsCount = proc.ReadValue<int>(objectsArray + ps);
+		byte[] objectEntries = proc.ReadBytes(Ptr(objectsArray), objectsCount * ps);
+		if (objectEntries == null) {
+			return false;
+		}
+		var objects = new List<IntPtr>();
+		var objectNames = new List<int>();
+		var objectClasses = new List<IntPtr>();
+		IntPtr classClass = IntPtr.Zero;
+		for (int i = 0; i < objectsCount; i++) {
+			IntPtr o = is64 ? (IntPtr) BitConverter.ToInt64(objectEntries, i * ps) : (IntPtr) BitConverter.ToInt32(objectEntries, i * ps);
+			if (o == IntPtr.Zero) continue;
+			byte[] header = proc.ReadBytes(o + oName, oClass - oName + ps);
+			if (header == null) continue;
+			int name = BitConverter.ToInt32(header, 0);
+			IntPtr cls = is64 ? (IntPtr) BitConverter.ToInt64(header, oClass - oName) : (IntPtr) BitConverter.ToInt32(header, oClass - oName);
+			objects.Add(o);
+			objectNames.Add(name);
+			objectClasses.Add(cls);
+			if (cls == o && name == nameIndex["Class"]) {
+				classClass = o; // Core.Class is its own class
+			}
+		}
+		if (classClass == IntPtr.Zero) {
+			return false;
+		}
+
+		var classes = new Dictionary<string, IntPtr>();
+		for (int i = 0; i < objects.Count; i++) {
+			if (objectClasses[i] != classClass) continue;
+			foreach (var kv in nameIndex) {
+				if (kv.Value == objectNames[i] && !classes.ContainsKey(kv.Key)) {
+					classes[kv.Key] = objects[i];
+				}
+			}
+		}
+		foreach (var c in new[] { "Object", "Actor", "Pawn", "Player", "LevelInfo", "GameInfo", "DeathMatchPlus", "PlayerReplicationInfo", "TeamInfo", "TournamentGameReplicationInfo", "GameEngine" }) {
+			if (!classes.ContainsKey(c)) {
+				print("[UT99] Class not loaded yet: " + c);
+				return false;
+			}
+		}
+
+		IntPtr engine = IntPtr.Zero;
+		for (int i = 0; i < objects.Count; i++) {
+			if (objectClasses[i] == classes["GameEngine"]) {
+				engine = objects[i];
+				break;
+			}
+		}
+		if (engine == IntPtr.Zero) {
+			return false;
+		}
+
+		// DeepPointer needs a static address holding the engine pointer: UnrealTournament.exe keeps one in a global variable
+		// (0x37E70 in v469e, 0x33800 in v469f RC6). We find it by searching the module's memory for the engine's address.
+		var exe = proc.ModulesWow64Safe().First(m => m.ModuleName.Equals("UnrealTournament.exe", StringComparison.OrdinalIgnoreCase));
+		int enginePtrOffset = -1;
+		for (int page = 0; page < exe.ModuleMemorySize && enginePtrOffset < 0; page += 0x1000) {
+			byte[] bytes = proc.ReadBytes(exe.BaseAddress + page, 0x1000);
+			if (bytes == null) continue;
+			for (int o = 0; o + ps <= bytes.Length; o += ps) {
+				long v = is64 ? BitConverter.ToInt64(bytes, o) : BitConverter.ToUInt32(bytes, o);
+				if (v == (long) engine) { enginePtrOffset = page + o; break; }
+			}
+		}
+		if (enginePtrOffset < 0) { print("[UT99] Static GameEngine pointer not found in UnrealTournament.exe"); return false; }
+
+		// UField::SuperField follows the UObject header: in the Pawn class, it points to the Actor class.
+		IntPtr pawnClass = classes["Pawn"];
+		int oSuper = -1;
+		for (int o = oClass + ps; o <= oClass + 8 * ps; o += ps) {
+			if (Ptr(pawnClass + o) == classes["Actor"]) { oSuper = o; break; }
+		}
+		if (oSuper < 0) { print("[UT99] UField::SuperField not found"); return false; }
+		int oNext = oSuper + ps;
+
+		// UStruct::Children: the head of the linked list of fields (properties, functions, states) declared by the class.
+		Func<IntPtr, int, string, bool> ChainContains = (cls, oHead, fieldName) => {
+			IntPtr f = Ptr(cls + oHead);
+			for (int guard = 0; f != IntPtr.Zero && guard < 4096; guard++) {
+				if (ObjOuter(f) != cls) return false;
+				if (ObjName(f) == fieldName) return true;
+				f = Ptr(f + oNext);
+			}
+			return false;
+		};
+		int oChildren = -1;
+		for (int o = oNext + ps; o < 0x100; o += ps) {
+			if (ChainContains(pawnClass, o, "GroundSpeed")) { oChildren = o; break; }
+		}
+		if (oChildren < 0) { print("[UT99] UStruct::Children not found"); return false; }
+
+		Func<IntPtr, string, IntPtr> FindField = (cls, fieldName) => {
+			for (; cls != IntPtr.Zero; cls = Ptr(cls + oSuper)) {
+				IntPtr f = Ptr(cls + oChildren);
+				for (int guard = 0; f != IntPtr.Zero && guard < 4096; guard++) {
+					if (ObjName(f) == fieldName) return f;
+					f = Ptr(f + oNext);
+				}
+			}
+			return IntPtr.Zero;
+		};
+
+		// UProperty::Offset: the Object.Outer and Object.Class properties mirror the UObject header, so their offsets are known.
+		IntPtr outerProp = FindField(classes["Object"], "Outer");
+		IntPtr classProp = FindField(classes["Object"], "Class");
+		int oPropOffset = -1;
+		for (int o = oNext + ps; o < 0x100; o += 4) {
+			if (proc.ReadValue<int>(outerProp + o) == oOuter && proc.ReadValue<int>(classProp + o) == oClass) { oPropOffset = o; break; }
+		}
+		if (oPropOffset < 0) { print("[UT99] UProperty::Offset not found"); return false; }
+
+		Func<string, string, int> Off = (className, propName) => {
+			IntPtr prop = FindField(classes[className], propName);
+			if (prop == IntPtr.Zero) throw new Exception("Property not found: " + className + "." + propName);
+			return proc.ReadValue<int>(prop + oPropOffset);
+		};
+
+		// UBoolProperty::BitMask: bBehindView and bIsPlayer share the same 32-bit word but use different bits.
+		IntPtr behindViewProp = FindField(pawnClass, "bBehindView");
+		IntPtr isPlayerProp = FindField(pawnClass, "bIsPlayer");
+		uint behindViewMask = 0;
+		for (int o = oPropOffset + 4; o < oPropOffset + 0x60; o += 4) {
+			uint a = proc.ReadValue<uint>(behindViewProp + o), b = proc.ReadValue<uint>(isPlayerProp + o);
+			if (a != 0 && b != 0 && a != b && (a & (a - 1)) == 0 && (b & (b - 1)) == 0) { behindViewMask = a; break; }
+		}
+		if (behindViewMask == 0) { print("[UT99] UBoolProperty::BitMask not found"); return false; }
+
+		// UEngine::Client is a native-only member in UT: it's the pointer to the *Client object.
+		int oClient = -1;
+		for (int o = oClass + ps; o < 0x200; o += ps) {
+			string cn = ObjName(ObjClass(Ptr(engine + o)));
+			if (cn != null && cn.EndsWith("Client")) { oClient = o; break; }
+		}
+		if (oClient < 0) { print("[UT99] UEngine::Client not found"); return false; }
+
+		// UClient::Viewports is a native TArray: its first element is a *Viewport object owned by the client.
+		IntPtr client = Ptr(engine + oClient);
+		int oViewports = -1;
+		for (int o = oClass + ps; o < 0x200; o += ps) {
+			IntPtr data = Ptr(client + o);
+			if (data == IntPtr.Zero) continue;
+			IntPtr viewport = Ptr(data);
+			string cn = ObjName(ObjClass(viewport));
+			if (cn != null && cn.EndsWith("Viewport") && ObjOuter(viewport) == client) { oViewports = o; break; }
+		}
+		if (oViewports < 0) { print("[UT99] UClient::Viewports not found (no viewport yet?)"); return false; }
+
+		int oActor = Off("Player", "Actor");
+		int oLevel = Off("Actor", "Level");
+		int oTitle = Off("LevelInfo", "Title");
+		int oGame = Off("LevelInfo", "Game");
+		int oGameName = Off("GameInfo", "GameName");
+		int oGameSpeed = Off("GameInfo", "GameSpeed");
+		int oGRI = Off("GameInfo", "GameReplicationInfo");
+		int oRemainingTime = Off("DeathMatchPlus", "RemainingTime");
+		int oElapsedTime = Off("DeathMatchPlus", "ElapsedTime");
+		int oPRI = Off("Pawn", "PlayerReplicationInfo");
+		int oGroundSpeed = Off("Pawn", "GroundSpeed");
+		int oJumpZ = Off("Pawn", "JumpZ");
+		int oAirControl = Off("Pawn", "AirControl");
+		int oBehindView = Off("Pawn", "bBehindView");
+		int oPlayerScore = Off("PlayerReplicationInfo", "Score");
+		int oTeamScore = Off("TeamInfo", "Score");
+		int oTeams = Off("TournamentGameReplicationInfo", "Teams");
+		int oGoalTeamScore = Off("TournamentGameReplicationInfo", "GoalTeamScore");
+		int oFragLimit = Off("TournamentGameReplicationInfo", "FragLimit");
+		int oTimeLimit = Off("TournamentGameReplicationInfo", "TimeLimit");
+
+		// Parent addresses table (all paths start at "UnrealTournament.exe", enginePtrOffset, which is the UGameEngine):
+		// oClient:													Pointer to UWindowsClient
+		// oClient, oViewports, 0x0:								Pointer to UWindowsViewport
+		// oClient, oViewports, 0x0, oActor:						Pointer to APlayerPawn
+		// ... oActor, oLevel:										Pointer to ALevelInfo
+		// ... oActor, oLevel, oGame:								Pointer to AGameInfo
+		// ... oActor, oLevel, oGame, oGRI:							Pointer to ATournamentGameReplicationInfo
+		// ... oActor, oLevel, oGame, oGRI, oTeams:					Pointer to ATeamInfo (Team 0 info)
+		// ... oActor, oPRI:										Pointer to APlayerReplicationInfo
+		// ... oActor, oLevel, oOuter:								Pointer to the map's package (its name is the map name)
+		Func<int[], DeepPointer> FromPawn = (offsets) => new DeepPointer("UnrealTournament.exe", enginePtrOffset, new[] { oClient, oViewports, 0x0, oActor }.Concat(offsets).ToArray());
+
+		var watchers = new MemoryWatcherList {
+			new StringWatcher(FromPawn(new[] { oLevel, oTitle, 0x0 }), ReadStringType.UTF16, 512) { Name = "localizedLevelName" },
+			new StringWatcher(FromPawn(new[] { oLevel, oGame, oGameName, 0x0 }), ReadStringType.UTF16, 512) { Name = "localizedGamemodeName" },
+			new MemoryWatcher<float>(FromPawn(new[] { oAirControl })) { Name = "airControl" },
+			new MemoryWatcher<float>(FromPawn(new[] { oJumpZ })) { Name = "jumpZ" },
+			new MemoryWatcher<int>(FromPawn(new[] { oStateFrame, oStateNode, oName })) { Name = "playerPawnStateName" },
+			new MemoryWatcher<uint>(FromPawn(new[] { oBehindView })) { Name = "playerPawnViewState" },
+			new MemoryWatcher<int>(FromPawn(new[] { oLevel, oOuter, oName })) { Name = "mapNameIndex" },
+			new MemoryWatcher<float>(FromPawn(new[] { oLevel, oGame, oGameSpeed })) { Name = "gameSpeed" },
+			new MemoryWatcher<float>(FromPawn(new[] { oGroundSpeed })) { Name = "playerGroundSpeed" },
+			new MemoryWatcher<int>(FromPawn(new[] { oLevel, oGame, oRemainingTime })) { Name = "remainingTime" },
+			new MemoryWatcher<int>(FromPawn(new[] { oLevel, oGame, oElapsedTime })) { Name = "elapsedTime" },
+			new MemoryWatcher<float>(FromPawn(new[] { oPRI, oPlayerScore })) { Name = "playerScore" },
+			new MemoryWatcher<float>(FromPawn(new[] { oLevel, oGame, oGRI, oTeams, oTeamScore })) { Name = "playerTeamScore" },
+			new MemoryWatcher<int>(FromPawn(new[] { oLevel, oGame, oGRI, oGoalTeamScore })) { Name = "gameItemGoals" },
+			new MemoryWatcher<int>(FromPawn(new[] { oLevel, oGame, oGRI, oFragLimit })) { Name = "gameKillGoals" },
+			new MemoryWatcher<int>(FromPawn(new[] { oLevel, oGame, oGRI, oTimeLimit })) { Name = "gameSecretGoals" }
+		};
+		// Like the classic state descriptor, a failed read (e.g. no player pawn while loading) gives 0.
+		// StringWatcher throws when set to null, so strings keep their last value instead.
+		foreach (var w in watchers.Where(x => !(x is StringWatcher))) {
+			w.FailAction = MemoryWatcher.ReadFailAction.SetZeroOrNull;
+		}
+		vars.watchers = watchers;
+		vars.behindViewMask = behindViewMask;
+
+		print(string.Format(
+			"[UT99] Resolved ({0}-bit). Engine=UnrealTournament.exe+0x{1:X} Client=+0x{2:X} Viewports=+0x{3:X} Actor=+0x{4:X} Level=+0x{5:X} Game=+0x{6:X} GRI=+0x{7:X} " +
+			"ElapsedTime=+0x{8:X} PRI=+0x{9:X} bBehindView=+0x{10:X}/0x{11:X} UProperty.Offset=+0x{12:X} UStruct.Children=+0x{13:X}",
+			is64 ? 64 : 32, enginePtrOffset, oClient, oViewports, oActor, oLevel, oGame, oGRI, oElapsedTime, oPRI, oBehindView, behindViewMask, oPropOffset, oChildren));
+		return true;
+	};
+	vars.TryResolve = TryResolve;
 }
 
 init
 {
 	// At the script initialization, we check the Unreal Tournament's module hash to try and determine the game's version.
-	// For now, only the release of the version 469e is supported.
+	// Unknown versions are still supported: memory offsets are resolved at runtime from the engine's reflection data.
 	var module = modules.Single(x => String.Equals(x.ModuleName, "UnrealTournament.exe", StringComparison.OrdinalIgnoreCase));
 	var hash = vars.CalcModuleHash(module);
 
-	if (hash != "03E2900BDC7848AD6B86D3171F19E25A8E395FAAFBD9EE4FD9F5C30F6A2D4DBE") {
-		if (MessageBox.Show(
-			"It seems you are not running the version v469e - Release of Unreal Tournament (1999). The Autosplitter may not work properly.\n\nPlease update your game with the latest community patch, available on the OldUnreal GitHub's page.\n\nWould you like me to open the website for you?",
-			"UT99 Autosplitter",
-			MessageBoxButtons.YesNo,
-			MessageBoxIcon.Warning
-		) == DialogResult.Yes) {
-			System.Diagnostics.Process.Start("https://github.com/OldUnreal/UnrealTournamentPatches/releases");
-		}
+	string knownVersion;
+	if (vars.knownVersions.TryGetValue(hash, out knownVersion)) {
+		version = knownVersion;
 	} else {
-		version = "v469e - Release";
+		version = "Unknown " + (game.Is64Bit() ? "64-bit" : "32-bit") + " build";
+		print("[UT99] Unknown UnrealTournament.exe build, SHA256: " + hash);
 	}
+
+	// Offsets are resolved in update, as the engine might still be starting up at this point.
+	vars.ClearNameCache();
+	vars.ready = false;
+	vars.nextResolveAttempt = DateTime.MinValue;
+
+	current.localizedLevelName = "";
+	current.localizedGamemodeName = "";
+	current.airControl = 0f;
+	current.jumpZ = 0f;
+	current.playerPawnState = "";
+	current.isBehindView = false;
+	current.mapName = "";
+	current.gameSpeed = 0f;
+	current.playerGroundSpeed = 0f;
+	current.remainingTime = 0;
+	current.elapsedTime = 0;
+	current.playerScore = 0f;
+	current.playerTeamScore = 0f;
+	current.gameItemGoals = 0;
+	current.gameKillGoals = 0;
+	current.gameSecretGoals = 0;
 }
 
 update
 {
+	if (!vars.ready) {
+		if (DateTime.Now < vars.nextResolveAttempt) {
+			return false;
+		}
+
+		vars.nextResolveAttempt = DateTime.Now.AddSeconds(1);
+
+		try {
+			var sw = System.Diagnostics.Stopwatch.StartNew();
+			vars.ready = vars.TryResolve(game);
+			print("[UT99] Offset resolution " + (vars.ready ? "succeeded" : "not ready yet") + " (" + sw.ElapsedMilliseconds + " ms)");
+		} catch (Exception e) {
+			print("[UT99] Offset resolution failed: " + e.Message);
+		}
+
+		if (!vars.ready) {
+			return false;
+		}
+	}
+
+	// Reading the current state
+	// localizedLevelName: 		"ITV Oblivion", "ITV oubli", etc.
+	// localizedGamemodeName: 	"Tournament DeathMatch", "Tournoi Combat à Mort", etc.
+	// airControl: 				player's air control value in percentage (%). Will be 1 if under the AntiGrav boots effect. Previously used as an anti-cheat experimental feature.
+	// jumpZ:					player's jump height value. Default is 325, or 357,5 if in Hardcore mode. Will be 975 under the AntiGrav boots effect. Previously used as an anti-cheat experimental feature.
+	// playerPawnState: 		the UnrealScript state the player is in ("PlayerWaiting", "PlayerWalking", "Dying", "GameEnded", "PlayerSwimming", etc.).
+	// isBehindView: 			True if the player is in third person (bBehindView).
+	// mapName: 				the map name, without extension. "DM-Oblivion", "DM-Peak", etc.
+	// gameSpeed: 				game speed in percentage (%).
+	// playerGroundSpeed: 		the player's speeed on the ground. Default is 400.
+	// remainingTime: 			game's remaining time in seconds.
+	// elapsedTime: 			game's elapsed time in seconds.
+	// playerScore: 			player's score. DOM gamemode's score is decimal, although hidden to the player. This is why it's a float.
+	// playerTeamScore: 		player's team score. DOM gamemode's score is decimal, although hidden to the player. This is why it's a float.
+	// gameItemGoals: 			score limit in DOM and CTF.
+	// gameKillGoals: 			score limit in DM and LDM (Challenge ladder mode).
+	// gameSecretGoals: 		usually a time goal in minutes. Will always be 1 in the second part of AS maps, for some reason.
+	var w = vars.watchers;
+	w.UpdateAll(game);
+
+	current.localizedLevelName = w["localizedLevelName"].Current;
+	current.localizedGamemodeName = w["localizedGamemodeName"].Current;
+	current.airControl = w["airControl"].Current;
+	current.jumpZ = w["jumpZ"].Current;
+	current.playerPawnState = vars.NameOf(game, w["playerPawnStateName"].Current);
+	current.isBehindView = (w["playerPawnViewState"].Current & vars.behindViewMask) != 0;
+	current.mapName = vars.NameOf(game, w["mapNameIndex"].Current);
+	current.gameSpeed = w["gameSpeed"].Current;
+	current.playerGroundSpeed = w["playerGroundSpeed"].Current;
+	current.remainingTime = w["remainingTime"].Current;
+	current.elapsedTime = w["elapsedTime"].Current;
+	current.playerScore = w["playerScore"].Current;
+	current.playerTeamScore = w["playerTeamScore"].Current;
+	current.gameItemGoals = w["gameItemGoals"].Current;
+	current.gameKillGoals = w["gameKillGoals"].Current;
+	current.gameSecretGoals = w["gameSecretGoals"].Current;
+
 	// Many things are happening here:
 	// - everytime the player dies, we increment vars.numberOfDeaths by 1. This can lead to an auto-reset if the proper setting is enabled
 	// - we update the humanPlayerScore variable by rounding the playerScore or playerTeamScore value, depending on the gamemode
 	// - we update the current level prediction time
 
- 	var oldStateIsDying = vars.IsInState(old.playerPawnState, vars.dyingState);
+	var oldStateIsDying = vars.IsInState(old.playerPawnState, vars.dyingState);
 	var currentStateIsDying = vars.IsInState(current.playerPawnState, vars.dyingState);
 
 	if (!oldStateIsDying && currentStateIsDying) {
@@ -320,7 +645,7 @@ update
 	var scoreToCheck = current.playerTeamScore;
 	var goalToCheck = current.gameItemGoals;
 
-	if (current.mapName != null && current.mapName.StartsWith("DM")) {
+	if (current.mapName.StartsWith("DM")) {
 		oldScoreToCheck = old.playerScore;
 		oldGoalToCheck = old.gameKillGoals;
 		scoreToCheck = current.playerScore;
@@ -332,7 +657,7 @@ update
 		vars.scorePerMin = current.elapsedTime == 0 ? 0 : Math.Truncate((scoreToCheck / current.elapsedTime) * 60 * 10.0) / 10.0;
 		var scorePerSecond = vars.scorePerMin == 0 ? 0 : vars.scorePerMin / 60;
 
-		if (current.mapName != null && current.mapName.StartsWith("DOM")) {
+		if (current.mapName.StartsWith("DOM")) {
 			scorePerSecond = 0.6f; // 0.6f is the best score per second possible in Domination
 		}
 
@@ -374,6 +699,10 @@ split
 	// - if no split already happened in the current level during the run
 	// - if the player is victorious
 
+	if (current.mapName == null) {
+		return false;
+	}
+
 	// We also split the timer after every flag capture on CTF maps if the ctf_flag_split setting is enabled.
 	if (settings["ctf_flag_split"] && current.mapName.StartsWith("CTF") && (current.playerTeamScore - old.playerTeamScore) == 1f) {
 		if (current.playerTeamScore == 3f) {
@@ -409,8 +738,8 @@ split
 			shouldSplit = vars.HasPlayerWon(current.gameItemGoals, current.gameKillGoals, current.playerScore, current.playerTeamScore);
 		} else if (current.gameSecretGoals == 1) {
 			// gameSecretGoals is always 1 in the second part of an Assault map.
-			// If the defending team has won the match, the player will be in third person view.
-			shouldSplit = vars.IsBehindViewEnabled(current.playerPawnViewState);
+			// If the defending team has won the match, the player will be in third person view (bBehindView).
+			shouldSplit = current.isBehindView;
 		}
 	}
 
