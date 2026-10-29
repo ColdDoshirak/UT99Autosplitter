@@ -69,11 +69,29 @@ startup
 	vars.dyingState = "Dying";
 	vars.gameEndedState = "GameEnded";
 
-	// Known builds, only used to display the version. Any other build is handled by the runtime offset resolution.
-	vars.knownVersions = new Dictionary<string, string>()
+	// Known builds: hash, version name and compatibility status.
+	vars.knownVersions = new Dictionary<string, Tuple<string, bool>>()
 	{
-		{ "03E2900BDC7848AD6B86D3171F19E25A8E395FAAFBD9EE4FD9F5C30F6A2D4DBE", "v469e - Release" },
-		{ "7EF4C07E096E392EA24DD4CE1E20921A5073EA5B25990ACB2DB81B8399DB5B3C", "v469f - RC6 (64-bit)" }
+		{ "2D64AD2C96A68503AB991091091B6CFA5B469477BFC57D73F1AB9C70F5E71162", Tuple.Create("v436", false) },
+		{ "B632148FC07D69260AD6304E96620F5ADB3FFA00BBB9176147A0C929028318FC", Tuple.Create("v451", false) },
+		{ "CAC582AB5308DBE0DC0DA82E0EBC15C51DDCBFFF4627E38821B179E6BBA13B64", Tuple.Create("v451b", false) },
+		{ "9016162E9650F72AA6EA30047F9BC5D2EC9C48A433F064C0CA6453036CAB5680", Tuple.Create("v469a", false) },
+		{ "D77EE35CAA6EB14E55AF116239DBADECAFA428D7CF8F322A88DDF41DA6F7AC91", Tuple.Create("v469b", false) },
+		{ "010FB16101B054A8C535D87EBE16A96C8EE088641AF2289F1E3B988B1B150B3F", Tuple.Create("v469c - RC2", true) },
+		{ "1ABFC42D668DD7E1A64F1C918E165E6BCA860A42EEE5C5F9EB03245E7A97D345", Tuple.Create("v469c - RC3", true) },
+		{ "4F81A00C31BCDCF69F42A69DDA8B1102B3106868A383008FCC06E6F29C5E8376", Tuple.Create("v469c - RC4", true) },
+		{ "944342836834383DFBBEBB4B047708A6471CE17FD912BF6F5E7E9734F9821D13", Tuple.Create("v469c", true) },
+		{ "347A1669155C6BE46E74EE0E35791A6B65368E66F993F7DCBBB2279F6D401C76", Tuple.Create("v469d - RC2", true) },
+		{ "90E443D57727EED9A4CF205F1757ABC961C75D9BEEE2484FF987ED25648B0F38", Tuple.Create("v469d - RC4", true) },
+		{ "56A5F9B060B12D651CC6E7C836C149136C30BABEAC4FD178D43DE4976C226CCF", Tuple.Create("v469d", true) },
+		{ "B7D2DCFA35B88ED5AD782F02B5CE9CCF1A12445418210180484063E217E227BF", Tuple.Create("v469e - RC4", true) },
+		{ "D74E0EF07F2C88B99DF1C57671C4DC54857C8F2814B56573AE24FE6A6CB39E2B", Tuple.Create("v469e - RC7", true) },
+		{ "ED050EE7F9E9182AC64BE09DF30A33BD40D88AB27D80DE73B0B884764C1728B7", Tuple.Create("v469e - RC8", true) },
+		{ "F5489BFF8DE96F163F53A4E31B97B43A5C954B5654ED76C0BFFF188AC6054F42", Tuple.Create("v469e - RC9", true) },
+		{ "13F15B6F8D1371D25D3C2669B704E9866C7D37721F3637ED699896694222A7F9", Tuple.Create("v469e - RC10", true) },
+		{ "03E2900BDC7848AD6B86D3171F19E25A8E395FAAFBD9EE4FD9F5C30F6A2D4DBE", Tuple.Create("v469e", true) },
+		{ "BFE240B884DC4141BDF8BA0CD7E45ABF693709AA79CC1613A0D505BF6EE5F09B", Tuple.Create("v469f - RC5 (64-bit)", true) },
+		{ "7EF4C07E096E392EA24DD4CE1E20921A5073EA5B25990ACB2DB81B8399DB5B3C", Tuple.Create("v469f - RC6 (64-bit)", true) }
 	};
 
 	// Defining first and last levels
@@ -525,16 +543,43 @@ startup
 init
 {
 	// At the script initialization, we check the Unreal Tournament's module hash to try and determine the game's version.
-	// Unknown versions are still supported: memory offsets are resolved at runtime from the engine's reflection data.
 	var module = modules.Single(x => String.Equals(x.ModuleName, "UnrealTournament.exe", StringComparison.OrdinalIgnoreCase));
 	var hash = vars.CalcModuleHash(module);
 
+	vars.unknownBuild = false;
+	vars.resolutionFailures = 0;
+	vars.compatibilityWarningShown = false;
+	Tuple<string, bool> build;
+
 	string knownVersion;
-	if (vars.knownVersions.TryGetValue(hash, out knownVersion)) {
-		version = knownVersion;
+	if (vars.knownVersions.TryGetValue(hash, out build)) {
+		version = build.Item1;
+		print("[UT99] Detected version: " + version);
+
+		if (!build.Item2)
+		{
+			vars.compatibilityWarningShown = true;
+
+			if (MessageBox.Show(
+				"You are running Unreal Tournament " + version + ", which is not supported by this autosplitter.\n\n" +
+				"Please update to OldUnreal v469c or newer.\n\n" +
+				"Would you like to open the OldUnreal download page?",
+				"UT99 Autosplitter",
+				MessageBoxButtons.YesNo,
+				MessageBoxIcon.Warning
+			) == DialogResult.Yes)
+			{
+				System.Diagnostics.Process.Start(
+					"https://github.com/OldUnreal/UnrealTournamentPatches/releases"
+				);
+			}
+		}
 	} else {
+		// Unknown build: attempt dynamic resolution.
+    	// Warn after 10 failed resolution attempts.
+		vars.unknownBuild = true;
 		version = "Unknown " + (game.Is64Bit() ? "64-bit" : "32-bit") + " build";
-		print("[UT99] Unknown UnrealTournament.exe build, SHA256: " + hash);
+		print("[UT99] Unknown build (SHA-256: " + hash + "). Attempting dynamic offset resolution.");
 	}
 
 	// Offsets are resolved in update, as the engine might still be starting up at this point.
@@ -575,6 +620,30 @@ update
 			print("[UT99] Offset resolution " + (vars.ready ? "succeeded" : "not ready yet") + " (" + sw.ElapsedMilliseconds + " ms)");
 		} catch (Exception e) {
 			print("[UT99] Offset resolution failed: " + e.Message);
+		}
+
+		if (!vars.ready && vars.unknownBuild && !vars.compatibilityWarningShown)
+		{
+			vars.resolutionFailures++;
+
+			if (vars.resolutionFailures >= 10)
+			{
+				vars.compatibilityWarningShown = true;
+
+				if (MessageBox.Show(
+					"This build of Unreal Tournament is not recognized, and the autosplitter failed to initialize after 10 attempts.\n\n" +
+					"Your game version may not be compatible. Please use a supported OldUnreal build (v469c or newer).\n\n" +
+					"Would you like to open the OldUnreal download page?",
+					"UT99 Autosplitter",
+					MessageBoxButtons.YesNo,
+					MessageBoxIcon.Warning
+				) == DialogResult.Yes)
+				{
+					System.Diagnostics.Process.Start(
+						"https://github.com/OldUnreal/UnrealTournamentPatches/releases"
+					);
+				}
+			}
 		}
 
 		if (!vars.ready) {
@@ -793,21 +862,24 @@ onReset
 isLoading
 {
 	// This is experimental and is not used officially in leaderboards.
-	if (settings["lrt_instead_of_igt"]) {
-		if (current.gameSpeed != 1f) {
-			return true;
-		}
-	}
+	if (settings["lrt_instead_of_igt"])
+		return current.gameSpeed != 1f;
 
-	return false;
+	// Freeze the timer between IGT updates.
+	// This is intended! IGT is computed in the gameTime function, not measured in real-time.
+	return true;
 }
 
 gameTime
 {
-	// We add 1 second to the in-game timer if the map elapsed time went up by 1, or if the remaining time went down by 1.
-	if (current.elapsedTime - old.elapsedTime == 1 || old.remainingTime - current.remainingTime == 1) {
-		return vars.elapsedTime += TimeSpan.FromSeconds(1);
-	}
+    if (settings["lrt_instead_of_igt"])
+        return;
 
-	return vars.elapsedTime;
+    // We add 1 second to the in-game timer if the map elapsed time went up by 1, or if the remaining time went down by 1.
+    if (current.elapsedTime - old.elapsedTime == 1 || old.remainingTime - current.remainingTime == 1)
+    {
+        return vars.elapsedTime += TimeSpan.FromSeconds(1);
+    }
+
+    return vars.elapsedTime;
 }

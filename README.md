@@ -1,10 +1,10 @@
 # UT99Autosplitter
 
-This is a simple LiveSplit ASL script for Unreal Tournament (1999) speedrunning. It works with **any OldUnreal 469 build**: the 32-bit builds (v469e and older) and the 64-bit builds (v469f and newer).
+This is a simple LiveSplit ASL script for Unreal Tournament (1999) speedrunning. It supports **OldUnreal v469c and later**, including both 32-bit (up to v469e) and 64-bit (from v469f onward) builds. This has been tested and verified on OldUnreal v469c through v469f RC6 with dynamic offset resolution.
 You can download the latest release version of the game on the [OldUnreal's website](https://www.oldunreal.com/downloads/unrealtournament/full-game-installers/), or download the latest community patch on the [OldUnreal's GitHub page](https://github.com/OldUnreal/UnrealTournamentPatches/releases).
 
 > [!NOTE]
-> So far, only **v469e - Release** and **v469f - RC6** have been tested. Other 469 builds are expected to work thanks to the runtime offset resolution, but if the script fails to initialize, please open an issue with your game version and the `[UT99]` lines from DebugView.
+> If the script fails to initialize, please open an issue with your game version and the `[UT99]` lines from [DebugView](https://learn.microsoft.com/en-us/sysinternals/downloads/debugview).
 
 - [Supported versions](#supported-versions)
 - [Installation](#installation)
@@ -19,7 +19,7 @@ You can download the latest release version of the game on the [OldUnreal's webs
   - [Full game splits (Standard ladder)](#full-game-splits-standard-ladder)
     - [Split by level](#split-by-level)
     - [Split by gamemode](#split-by-gamemode)
-  - [Full game splits (Standard ladder)](#full-game-splits-standard-ladder)
+  - [Full game splits (GOTY ladder)](#full-game-splits-goty-ladder)
     - [Split by level](#split-by-level-1)
     - [Split by gamemode](#split-by-gamemode-1)
   - [DM / DOM / CTF / Assault / Challenge](#dm--dom--ctf--assault--challenge)
@@ -34,21 +34,28 @@ You can download the latest release version of the game on the [OldUnreal's webs
 
 ## Supported versions
 
-| Version | Architecture | Status |
-|---|---|---|
-| v469e - Release | 32-bit | Tested |
-| v469f - RC6 | 64-bit | Tested |
-| Other 469 builds (469a–469d, 469f release and newer) | 32/64-bit | Expected to work, not tested yet |
-| 436 / 451 (pre-OldUnreal) | 32-bit | Unknown |
+### Compatibility
+
+| UT99 Version | Architecture | Status |
+| --- | :---: | :---: |
+| **469f** — RC5, RC6 | 64-bit | ✅ Compatible |
+| **469e** — RC4, RC7, RC8, RC9, RC10, Release | 32-bit | ✅ Compatible |
+| **469d** — RC2, RC4, Release | 32-bit | ✅ Compatible |
+| **469c** — RC2, RC3, RC4, Release | 32-bit | ✅ Compatible |
+| **469b** — Release and below | 32-bit | ❌ Incompatible |
 
 ## Installation
 
 > [!TIP]
 > Make sure you have installed the [latest version of LiveSplit](https://livesplit.org/downloads/).
 
-Simply download the [ut99-autosplitter.asl file](https://github.com/MrCodeMUN/UT99Autosplitter/blob/main/ut99-autosplitter.asl).
+Simply enable the autosplitter in LiveSplit by right clicking your splits, then **Edit Splits...** > **Activate**.
 
-After that, right click your splits and select **Edit Layout... > (+) > Control > Scriptable Auto splitter**. Then double click the **Scriptable Auto splitter** component, select **Browse** and choose the previously downloaded file. If no option appear, it means the script initialization has failed. Make sure you have the latest version of LiveSplit installed.
+Alternatively, you can download and setup the [ut99-autosplitter.asl file](https://github.com/MrCodeMUN/UT99Autosplitter/blob/main/ut99-autosplitter.asl).
+Right click your splits and select **Edit Layout... > (+) > Control > Scriptable Auto splitter**. Then double click the **Scriptable Auto splitter** component, select **Browse** and choose the previously downloaded file.
+
+> [!CAUTION]
+> Make sure you only use one of the methods above to install the autosplitter! If you do both, the autosplitter will run twice and double split during your runs.
 
 ## Features
 
@@ -75,12 +82,16 @@ The autosplitter is able to compute the total time spent in any level. You will 
 
 If the corresponding setting is enabled, the **Game Time** timing method from LiveSplit will return the LRT time, which is basically RTA but with pauses during loading times.
 
+LRT currently relies on the `GameInfo.GameSpeed` value, which briefly drops to `0` during loading. Unfortunately, this doesn't cover the entire loading period, so a more reliable method is still needed to accurately detect loading times.
+
 > [!CAUTION]
 > Be aware that the Unreal Tournament (1999)'s speedrun.com leaderboard **will not accept** submissions with LRT instead of RTA for now. RTA is still the main method of timing on the leaderboard.
 
 ## Setting up the autosplitter
 
-Double clicking the **Scriptable Auto splitter** component in your layout editor will bring the settings window. If no option appear, it means the script initialization has failed. Make sure you have the latest version of LiveSplit installed. By default, the script will:
+You can access the autosplitter's settings in the splits editor with the settings button. If you manually installed the autosplitter, double clicking the **Scriptable Auto splitter** component in your layout editor will bring the settings window. If the settings are unavailable, make sure you're using the latest version of LiveSplit and that the autosplitter has been loaded correctly.
+
+By default, the script will:
 
 - auto-start and auto-reset at the beginning of the ITV Oblivion level
 - auto-split at the end of every level if you are victorious
@@ -155,7 +166,7 @@ To display the in-game time, simply add a **Timer** (**Edit Layout... > (+) > Ti
 
 For extra challenge, you can also check the **No death challenge** option. This will auto-reset the timer if you ever die during your run.
 
-You can also split on very flag capture by checking the **Split after every flag capture on CTF maps** option.
+You can also split on every flag capture by checking the **Split after every flag capture on CTF maps** option.
 
 ### ASL Var Viewer
 
@@ -176,11 +187,11 @@ Under **Variables**, you will find:
 - **gameStyleGlitchStatus** (simple message explaining the reason if and why the game style glitch is being used)
 - **humanPlayerScore** (player's score or player's team's score, depending on the current gamemode; rounded to be more humanly readable)
 - **scorePerMin** (player's score or player's team's score per minute, depending on the current gamemode; rounded to be more humanly readable)
-- **estimatedLevelInGameTime** (level in-game time prediction based on the player's current pace; updates regurarly depending on score and elapsed time)
+- **estimatedLevelInGameTime** (level in-game time prediction based on the player's current pace; updates regularly depending on score and elapsed time)
 
 The last three variables will only update after each frag in DM, after each point earned in DOM or after each flag capture in CTF. These are not updated in AS maps.
 
-You will also have a multitude of other variables, which are being used by script. Play with the settings a bit to see if you find something interesting!
+You will also have a multitude of other variables, which are being used by the script. Play with the settings a bit to see if you find something interesting!
 
 ## How it works
 
@@ -188,17 +199,17 @@ The previous version of the script used fixed pointer paths, such as `UnrealTour
 
 This version finds the offsets itself when it connects to the game:
 
-1. `Core.dll` exports `UObject::GObjObjects` (all engine objects) and `FName::Names` (all names) in every 469 build.
+1. `Core.dll` exports `UObject::GObjObjects` (all engine objects) and `FName::Names` (all names) in supported 469 builds.
 2. The script walks these lists to find the `GameEngine` object and the UnrealScript classes it needs (`Pawn`, `GameInfo`, `DeathMatchPlus`, ...).
 3. Every `UProperty` stores its own byte offset, so values like `Pawn.GroundSpeed` or `LevelInfo.Game` come from the engine itself.
 4. The few C++-only fields (`UEngine::Client`, `UClient::Viewports` and the static engine pointer in `UnrealTournament.exe`) are found with simple checks.
 
 This takes about 50 ms. If the game is still starting up, the script tries again every second.
 
-For reference, here are the offsets the script finds on the two tested builds:
+For reference, here are the offsets the script finds on two tested builds:
 
 | Field | v469e (32-bit) | v469f RC6 (64-bit) |
-|---|---|---|
+| --- | --- | --- |
 | Static GameEngine pointer | `UnrealTournament.exe+0x37E70` | `UnrealTournament.exe+0x33800` |
 | UEngine.Client / UClient.Viewports / Player.Actor | 0x44 / 0x2C / 0x30 | 0x80 / 0x50 / 0x58 |
 | Actor.Level / LevelInfo.Game / GameInfo.GameReplicationInfo | 0x64 / 0x460 / 0x3A0 | 0x98 / 0x628 / 0x538 |
@@ -209,11 +220,11 @@ For reference, here are the offsets the script finds on the two tested builds:
 
 The script logs what it does with the `[UT99]` prefix. You can read these messages with [DebugView](https://learn.microsoft.com/en-us/sysinternals/downloads/debugview). On success, you'll see a line like this:
 
-```
+```text
 [UT99] Resolved (64-bit). Engine=UnrealTournament.exe+0x33800 Client=+0x80 Viewports=+0x50 ...
 ```
 
-If the script doesn't work with your game version, please open an issue and include your game version and the `[UT99]` lines from DebugView.
+If the script doesn't work with your game version, please open an issue and include your game version and the `[UT99]` lines from [DebugView](https://learn.microsoft.com/en-us/sysinternals/downloads/debugview).
 
 ## Have any issues?
 
@@ -223,8 +234,9 @@ Also, if you wish to update the script so it can work for other versions, feel f
 
 ## Special thanks
 
+- **HotDoshirak** for completely reworking how the autosplitter reads game memory, introducing dynamic offset resolution and 64-bit support. This makes supporting future UT99 versions much easier and is a huge improvement for the project
 - **liveth**, **/u/Envian**, **Driver** and **ISO2768mK** for their autosplitters (**Quake III Arena**, **UT2k4** and **Horizon Forbidden West**)
 - **Stephen Chapman** for his [Cheat Engine tutorial playlist](https://www.youtube.com/playlist?list=PLNffuWEygffbbT9Vz-Y1NXQxv2m6mrmHr)
 - **Slipyx** for [exporting UT99 UnrealScript sources](https://github.com/Slipyx/UT99)
-- **href404** and **zackan** for their help beta testing the script and their continuous support
+- **href404**, **zackan** and **cultlillebror** for their help beta testing the script and their continuous support
 - the **Unreal speedrunning community**, go checkout their [Discord server](https://discord.gg/ReRRcSJ)!
