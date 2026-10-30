@@ -13,7 +13,7 @@ You can download the latest release version of the game on the [OldUnreal's webs
   - [Auto-split](#auto-split)
   - [Auto-reset](#auto-reset)
   - [In-game time](#in-game-time)
-  - [Experimental: load removed time (LRT)](#experimental-load-removed-time-lrt)
+  - [Load removed time (LRT)](#load-removed-time-lrt)
 - [Setting up the autosplitter](#setting-up-the-autosplitter)
   - [No splits](#no-splits)
   - [Full game splits (Standard ladder)](#full-game-splits-standard-ladder)
@@ -78,11 +78,11 @@ By default, if the 'Reset' checkbox is checked, the autosplitter will auto-reset
 
 The autosplitter is able to compute the total time spent in any level. You will no longer have to manually add up all of the in-game times after the completion of a run!
 
-### Experimental: load removed time (LRT)
+### Load removed time (LRT)
 
 If the corresponding setting is enabled, the **Game Time** timing method from LiveSplit will return the LRT time, which is basically RTA but with pauses during loading times.
 
-LRT currently relies on the `GameInfo.GameSpeed` value, which briefly drops to `0` during loading. Unfortunately, this doesn't cover the entire loading period, so a more reliable method is still needed to accurately detect loading times.
+LRT currently relies on the `LevelInfo.TimeSeconds` value, which continuously advances while the game is running, even when paused, but stops updating during loading.
 
 > [!CAUTION]
 > Be aware that the Unreal Tournament (1999)'s speedrun.com leaderboard **will not accept** submissions with LRT instead of RTA for now. RTA is still the main method of timing on the leaderboard.

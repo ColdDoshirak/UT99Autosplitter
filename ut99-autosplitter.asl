@@ -475,9 +475,9 @@ startup
 		int oActor = Off("Player", "Actor");
 		int oLevel = Off("Actor", "Level");
 		int oTitle = Off("LevelInfo", "Title");
+		int oTimeSeconds = Off("LevelInfo", "TimeSeconds");
 		int oGame = Off("LevelInfo", "Game");
 		int oGameName = Off("GameInfo", "GameName");
-		int oGameSpeed = Off("GameInfo", "GameSpeed");
 		int oGRI = Off("GameInfo", "GameReplicationInfo");
 		int oRemainingTime = Off("DeathMatchPlus", "RemainingTime");
 		int oElapsedTime = Off("DeathMatchPlus", "ElapsedTime");
@@ -507,13 +507,13 @@ startup
 
 		var watchers = new MemoryWatcherList {
 			new StringWatcher(FromPawn(new[] { oLevel, oTitle, 0x0 }), ReadStringType.UTF16, 512) { Name = "localizedLevelName" },
+			new MemoryWatcher<float>(FromPawn(new[] { oLevel, oTimeSeconds })) { Name = "timeSeconds" },
 			new StringWatcher(FromPawn(new[] { oLevel, oGame, oGameName, 0x0 }), ReadStringType.UTF16, 512) { Name = "localizedGamemodeName" },
 			new MemoryWatcher<float>(FromPawn(new[] { oAirControl })) { Name = "airControl" },
 			new MemoryWatcher<float>(FromPawn(new[] { oJumpZ })) { Name = "jumpZ" },
 			new MemoryWatcher<int>(FromPawn(new[] { oStateFrame, oStateNode, oName })) { Name = "playerPawnStateName" },
 			new MemoryWatcher<uint>(FromPawn(new[] { oBehindView })) { Name = "playerPawnViewState" },
 			new MemoryWatcher<int>(FromPawn(new[] { oLevel, oOuter, oName })) { Name = "mapNameIndex" },
-			new MemoryWatcher<float>(FromPawn(new[] { oLevel, oGame, oGameSpeed })) { Name = "gameSpeed" },
 			new MemoryWatcher<float>(FromPawn(new[] { oGroundSpeed })) { Name = "playerGroundSpeed" },
 			new MemoryWatcher<int>(FromPawn(new[] { oLevel, oGame, oRemainingTime })) { Name = "remainingTime" },
 			new MemoryWatcher<int>(FromPawn(new[] { oLevel, oGame, oElapsedTime })) { Name = "elapsedTime" },
@@ -588,13 +588,13 @@ init
 	vars.nextResolveAttempt = DateTime.MinValue;
 
 	current.localizedLevelName = "";
+	current.timeSeconds = 0f;
 	current.localizedGamemodeName = "";
 	current.airControl = 0f;
 	current.jumpZ = 0f;
 	current.playerPawnState = "";
 	current.isBehindView = false;
 	current.mapName = "";
-	current.gameSpeed = 0f;
 	current.playerGroundSpeed = 0f;
 	current.remainingTime = 0;
 	current.elapsedTime = 0;
@@ -653,13 +653,13 @@ update
 
 	// Reading the current state
 	// localizedLevelName: 		"ITV Oblivion", "ITV oubli", etc.
+	// timeSeconds:				time elapsed since the map has finished loading (real-time).
 	// localizedGamemodeName: 	"Tournament DeathMatch", "Tournoi Combat à Mort", etc.
 	// airControl: 				player's air control value in percentage (%). Will be 1 if under the AntiGrav boots effect. Previously used as an anti-cheat experimental feature.
 	// jumpZ:					player's jump height value. Default is 325, or 357,5 if in Hardcore mode. Will be 975 under the AntiGrav boots effect. Previously used as an anti-cheat experimental feature.
 	// playerPawnState: 		the UnrealScript state the player is in ("PlayerWaiting", "PlayerWalking", "Dying", "GameEnded", "PlayerSwimming", etc.).
 	// isBehindView: 			True if the player is in third person (bBehindView).
 	// mapName: 				the map name, without extension. "DM-Oblivion", "DM-Peak", etc.
-	// gameSpeed: 				game speed in percentage (%).
 	// playerGroundSpeed: 		the player's speeed on the ground. Default is 400.
 	// remainingTime: 			game's remaining time in seconds.
 	// elapsedTime: 			game's elapsed time in seconds.
@@ -672,13 +672,13 @@ update
 	w.UpdateAll(game);
 
 	current.localizedLevelName = w["localizedLevelName"].Current;
+	current.timeSeconds = w["timeSeconds"].Current;
 	current.localizedGamemodeName = w["localizedGamemodeName"].Current;
 	current.airControl = w["airControl"].Current;
 	current.jumpZ = w["jumpZ"].Current;
 	current.playerPawnState = vars.NameOf(game, w["playerPawnStateName"].Current);
 	current.isBehindView = (w["playerPawnViewState"].Current & vars.behindViewMask) != 0;
 	current.mapName = vars.NameOf(game, w["mapNameIndex"].Current);
-	current.gameSpeed = w["gameSpeed"].Current;
 	current.playerGroundSpeed = w["playerGroundSpeed"].Current;
 	current.remainingTime = w["remainingTime"].Current;
 	current.elapsedTime = w["elapsedTime"].Current;
@@ -863,7 +863,7 @@ isLoading
 {
 	// This is experimental and is not used officially in leaderboards.
 	if (settings["lrt_instead_of_igt"])
-		return current.gameSpeed != 1f;
+		return old.timeSeconds == current.timeSeconds || current.timeSeconds == 0f;
 
 	// Freeze the timer between IGT updates.
 	// This is intended! IGT is computed in the gameTime function, not measured in real-time.
